@@ -1,0 +1,138 @@
+seed: 42
+classes: [Class_0, Class_1, Class_2, Class_3, Class_4]
+num_classes: 5
+train_dir: train_few_shot
+test_dir: test
+
+cv:
+  n_splits: 5
+  n_repeats: 10
+
+backbones:
+  # --- Tier 1: must-have ---
+  dinov2_g:
+    enabled: true
+    tier: 1
+    source: torch_hub
+    repo: facebookresearch/dinov2
+    model_name: dinov2_vitg14_reg
+    feat_dim: 1536
+    input_size: 224
+    description: "DINOv2 ViT-g/14 with registers - strongest general self-supervised features"
+
+  phikon_v2:
+    enabled: true
+    tier: 1
+    source: huggingface
+    repo: owkin/phikon-v2
+    feat_dim: 1024
+    input_size: 224
+    description: "Phikon-v2 ViT-L - pretrained on 460M histopathology tiles, domain-matched"
+
+  # --- Tier 2: strong additions ---
+  dinov3_l:
+    enabled: true
+    tier: 2
+    source: huggingface
+    repo: facebook/dinov3-vitl14-reg
+    feat_dim: 1024
+    input_size: 224
+    description: "DINOv3 ViT-L - Meta 2025, Gram anchoring, newer than DINOv2"
+
+  eva02_large:
+    enabled: true
+    tier: 2
+    source: timm
+    model_name: eva02_large_patch14_clip_224.merged2b_s4b_b131k
+    feat_dim: 1024
+    input_size: 224
+    description: "EVA-02 Large - CLIP init + MAE, complementary to DINOv2"
+
+  biomedclip:
+    enabled: true
+    tier: 2
+    source: open_clip
+    model_name: hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224
+    feat_dim: 512
+    input_size: 224
+    description: "BioMedCLIP - Microsoft biomedical CLIP, 15M image-text pairs"
+
+  # --- Tier 3: nice-to-have ---
+  convnextv2_large:
+    enabled: false
+    tier: 3
+    source: timm
+    model_name: convnextv2_large.fcmae_ft_in22k_in1k_384
+    feat_dim: 1536
+    input_size: 384
+    description: "ConvNeXtV2-Large - CNN inductive bias, complementary to ViTs"
+
+  openclip_vitl:
+    enabled: false
+    tier: 3
+    source: open_clip
+    model_name: ViT-L-14
+    pretrained: datacomp_xl_s13b_b90k
+    feat_dim: 768
+    input_size: 224
+    description: "OpenCLIP ViT-L/14 - language-supervised, different pretraining paradigm"
+
+  traditional:
+    enabled: false
+    tier: 3
+    source: traditional
+    feat_dim: 400
+    description: "HOG + LBP + color histograms - zero-cost interpretable baseline"
+
+input_variants:
+  - rgb
+  # - clahe     # enable after OOF shows benefit
+  # - gray3     # optional: may lose H&E color info
+
+heads:
+  logreg:
+    enabled: true
+    C_search: [0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0]
+    max_iter: 5000
+    class_weight: balanced
+
+  ridge:
+    enabled: true
+    alpha_search: [0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0]
+
+  knn:
+    enabled: true
+    k_search: [3, 5, 7, 11, 15]
+    metric: cosine
+    weights: distance
+
+tta:
+  fast: [identity, hflip, vflip]
+  safe: [identity, hflip, vflip, rot90, rot180, rot270, transpose, anti_transpose]
+  full: [identity, hflip, vflip, rot90, rot180, rot270, transpose, anti_transpose]
+
+fusion:
+  objective: "0.5 * macro_f1 + 0.5 * balanced_accuracy"
+  temperature_range: [0.5, 3.0]
+  class_bias_range: [-0.3, 0.3]
+
+modes:
+  fast:
+    backbones: [dinov2_g, phikon_v2]
+    heads: [logreg]
+    variants: [rgb]
+    tta: fast
+  safe:
+    backbones: [dinov2_g, phikon_v2, dinov3_l, eva02_large, biomedclip]
+    heads: [logreg, ridge]
+    variants: [rgb]
+    tta: safe
+  full:
+    backbones: [dinov2_g, phikon_v2, dinov3_l, eva02_large, biomedclip, convnextv2_large, openclip_vitl, traditional]
+    heads: [logreg, ridge, knn]
+    variants: [rgb, clahe]
+    tta: safe
+
+gpu_assignment:
+  cuda:0: [dinov2_g, dinov3_l, phikon_v2]
+  cuda:1: [eva02_large, biomedclip, openclip_vitl, convnextv2_large]

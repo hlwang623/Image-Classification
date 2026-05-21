@@ -1,0 +1,16 @@
+torch>=2.1
+torchvision
+timm>=1.0
+transformers>=4.40
+open-clip-torch
+scikit-learn
+scikit-image
+numpy
+pandas
+matplotlib
+seaborn
+pyyaml
+tqdm
+opencv-python
+joblib
+Pillow
